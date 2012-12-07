@@ -19,6 +19,7 @@
  */
 
 #include <common.h>
+#include <asm/byteorder.h>
 #include <grub/err.h>
 #include <grub/file.h>
 #include <grub/mm.h>
@@ -42,13 +43,13 @@
 /* Calculate in which group the inode can be found.  */
 #define inode_group(inode,sblock) ()
 
-#define UFS_BLKSZ(sblock) (grub_le_to_cpu32 (sblock->bsize))
+#define UFS_BLKSZ(sblock) (__le32_to_cpu (sblock->bsize))
 
 #define INODE(data,field) (data->ufs_type == UFS1 ? \
                            data->inode.  field : data->inode2.  field)
 #define INODE_ENDIAN(data,field,bits1,bits2) (data->ufs_type == UFS1 ? \
-                           grub_le_to_cpu##bits1 (data->inode.field) : \
-                           grub_le_to_cpu##bits2 (data->inode2.field))
+                           __le##bits1_to_cpu (data->inode.field) : \
+                           __le##bits2_to_cpu (data->inode2.field))
 #define INODE_SIZE(data) INODE_ENDIAN (data,size,32,64)
 #define INODE_MODE(data) INODE_ENDIAN (data,mode,16,16)
 #define INODE_BLKSZ(data) (data->ufs_type == UFS1 ? 32 : 64)
@@ -185,10 +186,6 @@ struct ufs_data
   int linknest;
 };
 
-#ifndef GRUB_UTIL
-static grub_dl_t my_mod;
-#endif
-
 /* Forward declaration.  */
 static grub_err_t ufs_find_file (struct ufs_data *data,
 				      const char *path);
@@ -289,7 +286,7 @@ ufs_read_file (struct ufs_data *data,
 	{
 	  data->disk->read_hook = read_hook;
 	  grub_disk_read (data->disk,
-			  blknr << grub_le_to_cpu32 (data->sblock.log2_blksz),
+			  blknr << __le32_to_cpu (data->sblock.log2_blksz),
 			  skipfirst, blockend, buf);
 	  data->disk->read_hook = 0;
 	  if (grub_errno)
@@ -313,21 +310,21 @@ ufs_read_inode (struct ufs_data *data, int ino)
   struct ufs_sblock *sblock = &data->sblock;
   
   /* Determine the group the inode is in.  */
-  int group = ino / grub_le_to_cpu32 (sblock->ino_per_group);
+  int group = ino / __le32_to_cpu (sblock->ino_per_group);
   
   /* Determine the inode within the group.  */
-  int grpino = ino % grub_le_to_cpu32 (sblock->ino_per_group);
+  int grpino = ino % __le32_to_cpu (sblock->ino_per_group);
   
   /* The first block of the group.  */
-  int grpblk = group * (grub_le_to_cpu32 (sblock->frags_per_group));
+  int grpblk = group * (__le32_to_cpu (sblock->frags_per_group));
   
   if (data->ufs_type == UFS1)
     {
       struct ufs_inode *inode = &data->inode;
       
       grub_disk_read (data->disk,
-		      (((grub_le_to_cpu32 (sblock->inoblk_offs) + grpblk)
-			<< grub_le_to_cpu32 (data->sblock.log2_blksz)))
+		      (((__le32_to_cpu (sblock->inoblk_offs) + grpblk)
+			<< __le32_to_cpu (data->sblock.log2_blksz)))
 		      + grpino / 4,
 		      (grpino % 4) * sizeof (struct ufs_inode),
 		      sizeof (struct ufs_inode),
@@ -338,8 +335,8 @@ ufs_read_inode (struct ufs_data *data, int ino)
       struct ufs2_inode *inode = &data->inode2;
       
       grub_disk_read (data->disk,
-		      (((grub_le_to_cpu32 (sblock->inoblk_offs) + grpblk)
-			<< grub_le_to_cpu32 (data->sblock.log2_blksz)))
+		      (((__le32_to_cpu (sblock->inoblk_offs) + grpblk)
+			<< __le32_to_cpu (data->sblock.log2_blksz)))
 		      + grpino / 2,
 		      (grpino % 2) * sizeof (struct ufs2_inode),
 		      sizeof (struct ufs2_inode),
@@ -368,7 +365,7 @@ ufs_lookup_symlink (struct ufs_data *data, int ino)
     {
       grub_disk_read (data->disk, 
 		      (INODE_DIRBLOCKS (data, 0) 
-		       << grub_le_to_cpu32 (data->sblock.log2_blksz)),
+		       << __le32_to_cpu (data->sblock.log2_blksz)),
 		      0, INODE_SIZE (data), symlink);
       symlink[INODE_SIZE (data)] = '\0';
     }
@@ -441,7 +438,7 @@ ufs_find_file (struct ufs_data *data, const char *path)
 	if (!strcmp (name, filename))
 	  {
 	    dirino = data->ino;
-	    ufs_read_inode (data, grub_le_to_cpu32 (dirent.ino));
+	    ufs_read_inode (data, __le32_to_cpu (dirent.ino));
 	    
 	    if (dirent.filetype == UFS_FILETYPE_LNK)
 	      {
@@ -470,7 +467,7 @@ ufs_find_file (struct ufs_data *data, const char *path)
 	  }
       }
       
-      pos += grub_le_to_cpu16 (dirent.direntlen);
+      pos += __le16_to_cpu (dirent.direntlen);
     } while (pos < INODE_SIZE (data));
   
   grub_error (GRUB_ERR_FILE_NOT_FOUND, "file not found");
@@ -498,12 +495,12 @@ ufs_mount (grub_disk_t disk)
       if (grub_errno)
 	goto fail;
       
-      if (grub_le_to_cpu32 (data->sblock.magic) == UFS_MAGIC)
+      if (__le32_to_cpu (data->sblock.magic) == UFS_MAGIC)
 	{
 	  data->ufs_type = UFS1;
 	  break;
 	}
-      else if (grub_le_to_cpu32 (data->sblock.magic) == UFS2_MAGIC)
+      else if (__le32_to_cpu (data->sblock.magic) == UFS2_MAGIC)
 	{
 	  data->ufs_type = UFS2;
 	  break;
@@ -584,7 +581,7 @@ ufs_dir (grub_device_t device, const char *path,
 	  break;
       }
       
-      pos += grub_le_to_cpu16 (dirent.direntlen);
+      pos += __le16_to_cpu (dirent.direntlen);
     }
 
  fail:
