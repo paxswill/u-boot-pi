@@ -331,47 +331,51 @@ ufs_read_file (struct ufs_data *data,
 
 /* Read inode INO from the mounted filesystem described by DATA.  This
    inode is used by default now.  */
-static grub_err_t
-ufs_read_inode (struct ufs_data *data, int ino)
-{
-  struct ufs_sblock *sblock = &data->sblock;
-  
-  /* Determine the group the inode is in.  */
-  int group = ino / __le32_to_cpu (sblock->ino_per_group);
-  
-  /* Determine the inode within the group.  */
-  int grpino = ino % __le32_to_cpu (sblock->ino_per_group);
-  
-  /* The first block of the group.  */
-  int grpblk = group * (__le32_to_cpu (sblock->frags_per_group));
-  
-  if (data->ufs_type == UFS1)
-    {
-      struct ufs_inode *inode = &data->inode;
-      
-      grub_disk_read (data->disk,
-		      (((__le32_to_cpu (sblock->inoblk_offs) + grpblk)
-			<< __le32_to_cpu (data->sblock.log2_blksz)))
-		      + grpino / 4,
-		      (grpino % 4) * sizeof (struct ufs_inode),
-		      sizeof (struct ufs_inode),
-		      (char *) inode);
-    }
-  else
-    {
-      struct ufs2_inode *inode = &data->inode2;
-      
-      grub_disk_read (data->disk,
-		      (((__le32_to_cpu (sblock->inoblk_offs) + grpblk)
-			<< __le32_to_cpu (data->sblock.log2_blksz)))
-		      + grpino / 2,
-		      (grpino % 2) * sizeof (struct ufs2_inode),
-		      sizeof (struct ufs2_inode),
-		      (char *) inode);
-    }
-  
-  data->ino = ino;
-  return grub_errno;
+static int ufs_read_inode (int ino) {
+	struct ufs_sblock *sblock = &curr_data.sblock;
+	/* XXX: The size for the following alloc might be off... */
+	ALLOC_CACHE_ALIGN_BUFFER(unsigned char, inobuf, curr_part.blksz);
+
+	/* Determine the group the inode is in.  */
+	int group = ino / __le32_to_cpu (sblock->ino_per_group);
+
+	/* Determine the inode within the group.  */
+	int grpino = ino % __le32_to_cpu (sblock->ino_per_group);
+
+	/* The first block of the group.  */
+	int grpblk = group * (__le32_to_cpu (sblock->frags_per_group));
+
+	if (curr_data.ufs_type == UFS1)
+	{
+		struct ufs_inode *inode = &curr_data.inode;
+
+		if (disk_read(
+				((__le32_to_cpu(sblock->inoblk_offs) + grpblk)
+				  << __le32_to_cpu(curr_data.sblock.log2_blksz)
+				  ) + grpino / 4, curr_part.blksz, inubuf) !=
+				curr_part.blksize)
+			return -1;
+
+		memcpy(sblock, inobuf + ((grpino % 4) *
+			sizeof(struct ufs_inode)),
+			sizeof(struct ufs_inode));
+	} else {
+		struct ufs2_inode *inode = &curr_data.inode2;
+
+		if (disk_read(
+				((__le32_to_cpu(sblock->inoblk_offs) + grpblk)
+				  << __le32_to_cpu(curr_data.sblock.log2_blksz)
+				  ) + grpino / 2, curr_part.blksz, inubuf) !=
+				curr_part.blksize)
+			return -1;
+
+		memcpy(sblock, inobuf + ((grpino % 2) *
+			sizeof(struct ufs2_inode)),
+			sizeof(struct ufs2_inode));
+	}
+
+	curr_data.ino = ino;
+	return 0;
 }
 
 
