@@ -18,13 +18,13 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#include <common.h>
 #include <grub/err.h>
 #include <grub/file.h>
 #include <grub/mm.h>
 #include <grub/misc.h>
 #include <grub/disk.h>
 #include <grub/dl.h>
-#include <grub/types.h>
 
 
 #define UFS_MAGIC		0x11954
@@ -62,107 +62,107 @@ static int sblocklist[] = { 128, 16, 0, 512, -1 };
 
 struct ufs_sblock
 {
-  grub_uint8_t unused[16];
+  uint8_t unused[16];
   /* The offset of the inodes in the cylinder group.  */
-  grub_uint32_t inoblk_offs;
+  uint32_t inoblk_offs;
   
-  grub_uint8_t unused2[4];
+  uint8_t unused2[4];
   
   /* The start of the cylinder group.  */
-  grub_uint32_t cylg_offset;
+  uint32_t cylg_offset;
   
-  grub_uint8_t unused3[20];
+  uint8_t unused3[20];
   
   /* The size of a block in bytes.  */
-  grub_int32_t bsize;
-  grub_uint8_t unused4[48];
+  int32_t bsize;
+  uint8_t unused4[48];
   
   /* The size of filesystem blocks to disk blocks.  */
-  grub_uint32_t log2_blksz;
-  grub_uint8_t unused5[80];
+  uint32_t log2_blksz;
+  uint8_t unused5[80];
   
   /* Inodes stored per cylinder group.  */
-  grub_uint32_t ino_per_group;
+  uint32_t ino_per_group;
   
   /* The frags per cylinder group.  */
-  grub_uint32_t frags_per_group;
+  uint32_t frags_per_group;
   
-  grub_uint8_t unused7[1180];
+  uint8_t unused7[1180];
   
   /* Magic value to check if this is really a UFS filesystem.  */
-  grub_uint32_t magic;
+  uint32_t magic;
 };
 
 /* UFS inode.  */
 struct ufs_inode
 {
-  grub_uint16_t mode;
-  grub_uint16_t nlinks;
-  grub_uint16_t uid;
-  grub_uint16_t gid;
-  grub_int64_t size;
-  grub_uint64_t atime;
-  grub_uint64_t mtime;
-  grub_uint64_t ctime;
+  uint16_t mode;
+  uint16_t nlinks;
+  uint16_t uid;
+  uint16_t gid;
+  int64_t size;
+  uint64_t atime;
+  uint64_t mtime;
+  uint64_t ctime;
   union
   {
     struct
     {
-      grub_uint32_t dir_blocks[UFS_DIRBLKS];
-      grub_uint32_t indir_blocks[UFS_INDIRBLKS];
+      uint32_t dir_blocks[UFS_DIRBLKS];
+      uint32_t indir_blocks[UFS_INDIRBLKS];
     } blocks;
-    grub_uint8_t symlink[(UFS_DIRBLKS + UFS_INDIRBLKS) * 4];
+    uint8_t symlink[(UFS_DIRBLKS + UFS_INDIRBLKS) * 4];
   };
-  grub_uint32_t flags;
-  grub_uint32_t nblocks;
-  grub_uint32_t gen;
-  grub_uint32_t unused;
-  grub_uint8_t pad[12];
+  uint32_t flags;
+  uint32_t nblocks;
+  uint32_t gen;
+  uint32_t unused;
+  uint8_t pad[12];
 };
 
 /* UFS inode.  */
 struct ufs2_inode
 {
-  grub_uint16_t mode;
-  grub_uint16_t nlinks;
-  grub_uint32_t uid;
-  grub_uint32_t gid;
-  grub_uint32_t blocksize;
-  grub_int64_t size;
-  grub_int64_t nblocks;
-  grub_uint64_t atime;
-  grub_uint64_t mtime;
-  grub_uint64_t ctime;
-  grub_uint64_t create_time;
-  grub_uint32_t atime_sec;
-  grub_uint32_t mtime_sec;
-  grub_uint32_t ctime_sec;
-  grub_uint32_t create_time_sec;
-  grub_uint32_t gen;
-  grub_uint32_t kernel_flags;
-  grub_uint32_t flags;
-  grub_uint32_t extsz;
-  grub_uint64_t ext[2];
+  uint16_t mode;
+  uint16_t nlinks;
+  uint32_t uid;
+  uint32_t gid;
+  uint32_t blocksize;
+  int64_t size;
+  int64_t nblocks;
+  uint64_t atime;
+  uint64_t mtime;
+  uint64_t ctime;
+  uint64_t create_time;
+  uint32_t atime_sec;
+  uint32_t mtime_sec;
+  uint32_t ctime_sec;
+  uint32_t create_time_sec;
+  uint32_t gen;
+  uint32_t kernel_flags;
+  uint32_t flags;
+  uint32_t extsz;
+  uint64_t ext[2];
   union
   {
     struct
     {
-      grub_uint64_t dir_blocks[UFS_DIRBLKS];
-      grub_uint64_t indir_blocks[UFS_INDIRBLKS];
+      uint64_t dir_blocks[UFS_DIRBLKS];
+      uint64_t indir_blocks[UFS_INDIRBLKS];
     } blocks;
-    grub_uint8_t symlink[(UFS_DIRBLKS + UFS_INDIRBLKS) * 8];
+    uint8_t symlink[(UFS_DIRBLKS + UFS_INDIRBLKS) * 8];
   };
 
-  grub_uint8_t unused[24];
+  uint8_t unused[24];
 };
 
 /* Directory entry.  */
 struct ufs_dirent
 {
-  grub_uint32_t ino;
-  grub_uint16_t direntlen;
-  grub_uint8_t filetype;
-  grub_uint8_t namelen;
+  uint32_t ino;
+  uint16_t direntlen;
+  uint8_t filetype;
+  uint8_t namelen;
 };
 
 /* Information about a "mounted" ufs filesystem.  */
@@ -210,7 +210,7 @@ ufs_get_file_block (struct ufs_data *data, unsigned int blk)
   /* Single indirect block.  */
   if (blk < indirsz)
     {
-      grub_uint32_t indir[UFS_BLKSZ (sblock)];
+      uint32_t indir[UFS_BLKSZ (sblock)];
       grub_disk_read (data->disk, INODE_INDIRBLOCKS (data, 0),
 		      0, sizeof (indir), (char *) indir);
       return indir[blk];
@@ -220,7 +220,7 @@ ufs_get_file_block (struct ufs_data *data, unsigned int blk)
   /* Double indirect block.  */
   if (blk < UFS_BLKSZ (sblock) / indirsz)
     {
-      grub_uint32_t indir[UFS_BLKSZ (sblock)];
+      uint32_t indir[UFS_BLKSZ (sblock)];
       
       grub_disk_read (data->disk, INODE_INDIRBLOCKS (data, 1),
 		      0, sizeof (indir), (char *) indir);
@@ -239,11 +239,11 @@ ufs_get_file_block (struct ufs_data *data, unsigned int blk)
 
 /* Read LEN bytes from the file described by DATA starting with byte
    POS.  Return the amount of read bytes in READ.  */
-static grub_ssize_t
+static ssize_t
 ufs_read_file (struct ufs_data *data,
 		    void (*read_hook) (grub_disk_addr_t sector,
 				       unsigned offset, unsigned length),
-		    int pos, grub_size_t len, char *buf)
+		    int pos, size_t len, char *buf)
 {
   struct ufs_sblock *sblock = &data->sblock;
   int i;
@@ -296,7 +296,7 @@ ufs_read_file (struct ufs_data *data,
 	    return -1;
 	}
       else
-	grub_memset (buf, UFS_BLKSZ (sblock) - skipfirst, 0);
+	memset (buf, UFS_BLKSZ (sblock) - skipfirst, 0);
 
       buf += UFS_BLKSZ (sblock) - skipfirst;
     }
@@ -363,7 +363,7 @@ ufs_lookup_symlink (struct ufs_data *data, int ino)
   
   if (INODE_SIZE (data) < (UFS_DIRBLKS + UFS_INDIRBLKS
 			  * INODE_BLKSZ (data)))
-    grub_strcpy (symlink, (char *) INODE (data, symlink));
+    strcpy (symlink, (char *) INODE (data, symlink));
   else
     {
       grub_disk_read (data->disk, 
@@ -394,13 +394,13 @@ ufs_lookup_symlink (struct ufs_data *data, int ino)
 static grub_err_t
 ufs_find_file (struct ufs_data *data, const char *path)
 {
-  char fpath[grub_strlen (path)];
+  char fpath[strlen (path)];
   char *name = fpath;
   char *next;
   unsigned int pos = 0;
   int dirino;
   
-  grub_strncpy (fpath, path, grub_strlen (path));
+  strncpy (fpath, path, strlen (path));
   
   /* Skip the first slash.  */
   if (name[0] == '/')
@@ -411,7 +411,7 @@ ufs_find_file (struct ufs_data *data, const char *path)
     }
 
   /* Extract the actual part from the pathname.  */
-  next = grub_strchr (name, '/');
+  next = strchr (name, '/');
   if (next)
     {
       next[0] = '\0';
@@ -422,7 +422,7 @@ ufs_find_file (struct ufs_data *data, const char *path)
     {
       struct ufs_dirent dirent;
       
-      if (grub_strlen (name) == 0)
+      if (strlen (name) == 0)
 	return GRUB_ERR_NONE;
       
       if (ufs_read_file (data, 0, pos, sizeof (dirent),
@@ -438,7 +438,7 @@ ufs_find_file (struct ufs_data *data, const char *path)
 	
 	filename[dirent.namelen] = '\0';
 	
-	if (!grub_strcmp (name, filename))
+	if (!strcmp (name, filename))
 	  {
 	    dirino = data->ino;
 	    ufs_read_inode (data, grub_le_to_cpu32 (dirent.ino));
@@ -456,7 +456,7 @@ ufs_find_file (struct ufs_data *data, const char *path)
 	    pos = 0;
 
 	    name = next;
-	    next = grub_strchr (name, '/');
+	    next = strchr (name, '/');
 	    if (next)
 	      {
 		next[0] = '\0';
@@ -485,7 +485,7 @@ ufs_mount (grub_disk_t disk)
   struct ufs_data *data;
   int *sblklist = sblocklist;
   
-  data = grub_malloc (sizeof (struct ufs_data));
+  data = malloc (sizeof (struct ufs_data));
   if (!data)
     return 0;
   
@@ -521,7 +521,7 @@ ufs_mount (grub_disk_t disk)
   return data;
 
  fail:
-  grub_free (data);
+  free (data);
   
   if (grub_errno == GRUB_ERR_OUT_OF_RANGE)
     grub_error (GRUB_ERR_BAD_FS, "not a ufs filesystem");
@@ -588,7 +588,7 @@ ufs_dir (grub_device_t device, const char *path,
     }
 
  fail:
-  grub_free (data);
+  free (data);
 
   return grub_errno;
 }
@@ -606,7 +606,7 @@ ufs_open (struct grub_file *file, const char *name)
   ufs_read_inode (data, 2);
   if (grub_errno)
     {
-      grub_free (data);
+      free (data);
       return grub_errno;
     }
     
@@ -630,8 +630,8 @@ ufs_open (struct grub_file *file, const char *name)
 }
 
 
-static grub_ssize_t
-ufs_read (grub_file_t file, char *buf, grub_size_t len)
+static ssize_t
+ufs_read (grub_file_t file, char *buf, size_t len)
 {
   struct ufs_data *data = 
     (struct ufs_data *) file->data;
@@ -643,7 +643,7 @@ ufs_read (grub_file_t file, char *buf, grub_size_t len)
 static grub_err_t
 ufs_close (grub_file_t file)
 {
-  grub_free (file->data);
+  free (file->data);
   
   return GRUB_ERR_NONE;
 }
