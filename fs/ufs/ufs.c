@@ -27,17 +27,17 @@
 #include <grub/types.h>
 
 
-#define GRUB_UFS_MAGIC		0x11954
-#define GRUB_UFS2_MAGIC		0x19540119
-#define GRUB_UFS_INODE		2
-#define GRUB_UFS_FILETYPE_DIR	4
-#define GRUB_UFS_FILETYPE_LNK	10
-#define GRUB_UFS_MAX_SYMLNK_CNT	8
+#define UFS_MAGIC		0x11954
+#define UFS2_MAGIC		0x19540119
+#define UFS_INODE		2
+#define UFS_FILETYPE_DIR	4
+#define UFS_FILETYPE_LNK	10
+#define UFS_MAX_SYMLNK_CNT	8
 
-#define GRUB_UFS_DIRBLKS	12
-#define GRUB_UFS_INDIRBLKS	3
+#define UFS_DIRBLKS	12
+#define UFS_INDIRBLKS	3
 
-#define GRUB_UFS_ATTR_DIR	040000
+#define UFS_ATTR_DIR	040000
 
 /* Calculate in which group the inode can be found.  */
 #define inode_group(inode,sblock) ()
@@ -60,7 +60,7 @@
 /* The blocks on which the superblock can be found.  */
 static int sblocklist[] = { 128, 16, 0, 512, -1 };
 
-struct grub_ufs_sblock
+struct ufs_sblock
 {
   grub_uint8_t unused[16];
   /* The offset of the inodes in the cylinder group.  */
@@ -94,7 +94,7 @@ struct grub_ufs_sblock
 };
 
 /* UFS inode.  */
-struct grub_ufs_inode
+struct ufs_inode
 {
   grub_uint16_t mode;
   grub_uint16_t nlinks;
@@ -108,10 +108,10 @@ struct grub_ufs_inode
   {
     struct
     {
-      grub_uint32_t dir_blocks[GRUB_UFS_DIRBLKS];
-      grub_uint32_t indir_blocks[GRUB_UFS_INDIRBLKS];
+      grub_uint32_t dir_blocks[UFS_DIRBLKS];
+      grub_uint32_t indir_blocks[UFS_INDIRBLKS];
     } blocks;
-    grub_uint8_t symlink[(GRUB_UFS_DIRBLKS + GRUB_UFS_INDIRBLKS) * 4];
+    grub_uint8_t symlink[(UFS_DIRBLKS + UFS_INDIRBLKS) * 4];
   };
   grub_uint32_t flags;
   grub_uint32_t nblocks;
@@ -121,7 +121,7 @@ struct grub_ufs_inode
 };
 
 /* UFS inode.  */
-struct grub_ufs2_inode
+struct ufs2_inode
 {
   grub_uint16_t mode;
   grub_uint16_t nlinks;
@@ -147,17 +147,17 @@ struct grub_ufs2_inode
   {
     struct
     {
-      grub_uint64_t dir_blocks[GRUB_UFS_DIRBLKS];
-      grub_uint64_t indir_blocks[GRUB_UFS_INDIRBLKS];
+      grub_uint64_t dir_blocks[UFS_DIRBLKS];
+      grub_uint64_t indir_blocks[UFS_INDIRBLKS];
     } blocks;
-    grub_uint8_t symlink[(GRUB_UFS_DIRBLKS + GRUB_UFS_INDIRBLKS) * 8];
+    grub_uint8_t symlink[(UFS_DIRBLKS + UFS_INDIRBLKS) * 8];
   };
 
   grub_uint8_t unused[24];
 };
 
 /* Directory entry.  */
-struct grub_ufs_dirent
+struct ufs_dirent
 {
   grub_uint32_t ino;
   grub_uint16_t direntlen;
@@ -166,14 +166,14 @@ struct grub_ufs_dirent
 };
 
 /* Information about a "mounted" ufs filesystem.  */
-struct grub_ufs_data
+struct ufs_data
 {
-  struct grub_ufs_sblock sblock;
+  struct ufs_sblock sblock;
   grub_disk_t disk;
   union
   {
-    struct grub_ufs_inode inode;
-    struct grub_ufs2_inode inode2;
+    struct ufs_inode inode;
+    struct ufs2_inode inode2;
   };
   enum
     {
@@ -190,21 +190,21 @@ static grub_dl_t my_mod;
 #endif
 
 /* Forward declaration.  */
-static grub_err_t grub_ufs_find_file (struct grub_ufs_data *data,
+static grub_err_t ufs_find_file (struct ufs_data *data,
 				      const char *path);
 
 
 static int
-grub_ufs_get_file_block (struct grub_ufs_data *data, unsigned int blk)
+ufs_get_file_block (struct ufs_data *data, unsigned int blk)
 {
-  struct grub_ufs_sblock *sblock = &data->sblock;
+  struct ufs_sblock *sblock = &data->sblock;
   unsigned int indirsz;
   
   /* Direct.  */
-  if (blk < GRUB_UFS_DIRBLKS)
+  if (blk < UFS_DIRBLKS)
     return INODE_DIRBLOCKS (data, blk);
   
-  blk -= GRUB_UFS_DIRBLKS;
+  blk -= UFS_DIRBLKS;
   
   indirsz = UFS_BLKSZ (sblock) / INODE_BLKSZ (data);
   /* Single indirect block.  */
@@ -240,12 +240,12 @@ grub_ufs_get_file_block (struct grub_ufs_data *data, unsigned int blk)
 /* Read LEN bytes from the file described by DATA starting with byte
    POS.  Return the amount of read bytes in READ.  */
 static grub_ssize_t
-grub_ufs_read_file (struct grub_ufs_data *data,
+ufs_read_file (struct ufs_data *data,
 		    void (*read_hook) (grub_disk_addr_t sector,
 				       unsigned offset, unsigned length),
 		    int pos, grub_size_t len, char *buf)
 {
-  struct grub_ufs_sblock *sblock = &data->sblock;
+  struct ufs_sblock *sblock = &data->sblock;
   int i;
   int blockcnt;
 
@@ -263,7 +263,7 @@ grub_ufs_read_file (struct grub_ufs_data *data,
       
       int skipfirst = 0;
       
-      blknr = grub_ufs_get_file_block (data, i);
+      blknr = ufs_get_file_block (data, i);
       if (grub_errno)
 	return -1;
       
@@ -308,9 +308,9 @@ grub_ufs_read_file (struct grub_ufs_data *data,
 /* Read inode INO from the mounted filesystem described by DATA.  This
    inode is used by default now.  */
 static grub_err_t
-grub_ufs_read_inode (struct grub_ufs_data *data, int ino)
+ufs_read_inode (struct ufs_data *data, int ino)
 {
-  struct grub_ufs_sblock *sblock = &data->sblock;
+  struct ufs_sblock *sblock = &data->sblock;
   
   /* Determine the group the inode is in.  */
   int group = ino / grub_le_to_cpu32 (sblock->ino_per_group);
@@ -323,26 +323,26 @@ grub_ufs_read_inode (struct grub_ufs_data *data, int ino)
   
   if (data->ufs_type == UFS1)
     {
-      struct grub_ufs_inode *inode = &data->inode;
+      struct ufs_inode *inode = &data->inode;
       
       grub_disk_read (data->disk,
 		      (((grub_le_to_cpu32 (sblock->inoblk_offs) + grpblk)
 			<< grub_le_to_cpu32 (data->sblock.log2_blksz)))
 		      + grpino / 4,
-		      (grpino % 4) * sizeof (struct grub_ufs_inode),
-		      sizeof (struct grub_ufs_inode),
+		      (grpino % 4) * sizeof (struct ufs_inode),
+		      sizeof (struct ufs_inode),
 		      (char *) inode);
     }
   else
     {
-      struct grub_ufs2_inode *inode = &data->inode2;
+      struct ufs2_inode *inode = &data->inode2;
       
       grub_disk_read (data->disk,
 		      (((grub_le_to_cpu32 (sblock->inoblk_offs) + grpblk)
 			<< grub_le_to_cpu32 (data->sblock.log2_blksz)))
 		      + grpino / 2,
-		      (grpino % 2) * sizeof (struct grub_ufs2_inode),
-		      sizeof (struct grub_ufs2_inode),
+		      (grpino % 2) * sizeof (struct ufs2_inode),
+		      sizeof (struct ufs2_inode),
 		      (char *) inode);
     }
   
@@ -354,14 +354,14 @@ grub_ufs_read_inode (struct grub_ufs_data *data, int ino)
 /* Lookup the symlink the current inode points to.  INO is the inode
    number of the directory the symlink is relative to.  */
 static grub_err_t
-grub_ufs_lookup_symlink (struct grub_ufs_data *data, int ino)
+ufs_lookup_symlink (struct ufs_data *data, int ino)
 {
   char symlink[INODE_SIZE (data)];
   
-  if (++data->linknest > GRUB_UFS_MAX_SYMLNK_CNT)
+  if (++data->linknest > UFS_MAX_SYMLNK_CNT)
     return grub_error (GRUB_ERR_SYMLINK_LOOP, "too deep nesting of symlinks");
   
-  if (INODE_SIZE (data) < (GRUB_UFS_DIRBLKS + GRUB_UFS_INDIRBLKS
+  if (INODE_SIZE (data) < (UFS_DIRBLKS + UFS_INDIRBLKS
 			  * INODE_BLKSZ (data)))
     grub_strcpy (symlink, (char *) INODE (data, symlink));
   else
@@ -375,13 +375,13 @@ grub_ufs_lookup_symlink (struct grub_ufs_data *data, int ino)
 
   /* The symlink is an absolute path, go back to the root inode.  */
   if (symlink[0] == '/')
-    ino = GRUB_UFS_INODE;
+    ino = UFS_INODE;
   
   /* Now load in the old inode.  */
-  if (grub_ufs_read_inode (data, ino))
+  if (ufs_read_inode (data, ino))
     return grub_errno;
   
-  grub_ufs_find_file (data, symlink);
+  ufs_find_file (data, symlink);
   if (grub_errno)
     grub_error (grub_errno, "Can not follow symlink `%s'.", symlink);
   
@@ -392,7 +392,7 @@ grub_ufs_lookup_symlink (struct grub_ufs_data *data, int ino)
 /* Find the file with the pathname PATH on the filesystem described by
    DATA.  */
 static grub_err_t
-grub_ufs_find_file (struct grub_ufs_data *data, const char *path)
+ufs_find_file (struct ufs_data *data, const char *path)
 {
   char fpath[grub_strlen (path)];
   char *name = fpath;
@@ -420,19 +420,19 @@ grub_ufs_find_file (struct grub_ufs_data *data, const char *path)
   
   do
     {
-      struct grub_ufs_dirent dirent;
+      struct ufs_dirent dirent;
       
       if (grub_strlen (name) == 0)
 	return GRUB_ERR_NONE;
       
-      if (grub_ufs_read_file (data, 0, pos, sizeof (dirent),
+      if (ufs_read_file (data, 0, pos, sizeof (dirent),
 			      (char *) &dirent) < 0)
 	return grub_errno;
       
       {
 	char filename[dirent.namelen + 1];
 
-	if (grub_ufs_read_file (data, 0, pos + sizeof (dirent),
+	if (ufs_read_file (data, 0, pos + sizeof (dirent),
 				dirent.namelen, filename) < 0)
 	  return grub_errno;
 	
@@ -441,11 +441,11 @@ grub_ufs_find_file (struct grub_ufs_data *data, const char *path)
 	if (!grub_strcmp (name, filename))
 	  {
 	    dirino = data->ino;
-	    grub_ufs_read_inode (data, grub_le_to_cpu32 (dirent.ino));
+	    ufs_read_inode (data, grub_le_to_cpu32 (dirent.ino));
 	    
-	    if (dirent.filetype == GRUB_UFS_FILETYPE_LNK)
+	    if (dirent.filetype == UFS_FILETYPE_LNK)
 	      {
-		grub_ufs_lookup_symlink (data, dirino);
+		ufs_lookup_symlink (data, dirino);
 		if (grub_errno)
 		  return grub_errno;
 	      }
@@ -463,7 +463,7 @@ grub_ufs_find_file (struct grub_ufs_data *data, const char *path)
 		next++;
 	      }
 	    
-	    if (!(dirent.filetype & GRUB_UFS_FILETYPE_DIR))
+	    if (!(dirent.filetype & UFS_FILETYPE_DIR))
 	      return grub_error (GRUB_ERR_BAD_FILE_TYPE, "not a directory");
 	    
 	    continue;
@@ -479,13 +479,13 @@ grub_ufs_find_file (struct grub_ufs_data *data, const char *path)
 
 
 /* Mount the filesystem on the disk DISK.  */
-static struct grub_ufs_data *
-grub_ufs_mount (grub_disk_t disk)
+static struct ufs_data *
+ufs_mount (grub_disk_t disk)
 {
-  struct grub_ufs_data *data;
+  struct ufs_data *data;
   int *sblklist = sblocklist;
   
-  data = grub_malloc (sizeof (struct grub_ufs_data));
+  data = grub_malloc (sizeof (struct ufs_data));
   if (!data)
     return 0;
   
@@ -493,17 +493,17 @@ grub_ufs_mount (grub_disk_t disk)
   data->ufs_type = UNKNOWN;
   while (*sblklist != -1)
     {
-      grub_disk_read (disk, *sblklist, 0, sizeof (struct grub_ufs_sblock),
+      grub_disk_read (disk, *sblklist, 0, sizeof (struct ufs_sblock),
 		      (char *) &data->sblock);
       if (grub_errno)
 	goto fail;
       
-      if (grub_le_to_cpu32 (data->sblock.magic) == GRUB_UFS_MAGIC)
+      if (grub_le_to_cpu32 (data->sblock.magic) == UFS_MAGIC)
 	{
 	  data->ufs_type = UFS1;
 	  break;
 	}
-      else if (grub_le_to_cpu32 (data->sblock.magic) == GRUB_UFS2_MAGIC)
+      else if (grub_le_to_cpu32 (data->sblock.magic) == UFS2_MAGIC)
 	{
 	  data->ufs_type = UFS2;
 	  break;
@@ -531,18 +531,18 @@ grub_ufs_mount (grub_disk_t disk)
 
 
 static grub_err_t
-grub_ufs_dir (grub_device_t device, const char *path, 
+ufs_dir (grub_device_t device, const char *path, 
 	       int (*hook) (const char *filename, int dir))
 {
-  struct grub_ufs_data *data;
-  struct grub_ufs_sblock *sblock;
+  struct ufs_data *data;
+  struct ufs_sblock *sblock;
   unsigned int pos = 0;
 
-  data = grub_ufs_mount (device->disk);
+  data = ufs_mount (device->disk);
   if (!data)
     return grub_errno;
   
-  grub_ufs_read_inode (data, GRUB_UFS_INODE);
+  ufs_read_inode (data, UFS_INODE);
   if (grub_errno)
     return grub_errno;
   
@@ -554,11 +554,11 @@ grub_ufs_dir (grub_device_t device, const char *path,
       return grub_errno;
     }
   
-  grub_ufs_find_file (data, path);
+  ufs_find_file (data, path);
   if (grub_errno)
     goto fail;  
   
-  if (!(INODE_MODE (data) & GRUB_UFS_ATTR_DIR))
+  if (!(INODE_MODE (data) & UFS_ATTR_DIR))
     {
       grub_error (GRUB_ERR_BAD_FILE_TYPE, "not a directory");
       goto fail;
@@ -566,21 +566,21 @@ grub_ufs_dir (grub_device_t device, const char *path,
   
   while (pos < INODE_SIZE (data))
     {
-      struct grub_ufs_dirent dirent;
+      struct ufs_dirent dirent;
       
-      if (grub_ufs_read_file (data, 0, pos, sizeof (dirent),
+      if (ufs_read_file (data, 0, pos, sizeof (dirent),
 			      (char *) &dirent) < 0)
 	break;
       
       {
 	char filename[dirent.namelen + 1];
 	
-	if (grub_ufs_read_file (data, 0, pos + sizeof (dirent),
+	if (ufs_read_file (data, 0, pos + sizeof (dirent),
 				dirent.namelen, filename) < 0)
 	  break;
 	
 	filename[dirent.namelen] = '\0';
-	if (hook (filename, dirent.filetype == GRUB_UFS_FILETYPE_DIR))
+	if (hook (filename, dirent.filetype == UFS_FILETYPE_DIR))
 	  break;
       }
       
@@ -596,14 +596,14 @@ grub_ufs_dir (grub_device_t device, const char *path,
 
 /* Open a file named NAME and initialize FILE.  */
 static grub_err_t
-grub_ufs_open (struct grub_file *file, const char *name)
+ufs_open (struct grub_file *file, const char *name)
 {
-  struct grub_ufs_data *data;
-  data = grub_ufs_mount (file->device->disk);
+  struct ufs_data *data;
+  data = ufs_mount (file->device->disk);
   if (!data)
     return grub_errno;
   
-  grub_ufs_read_inode (data, 2);
+  ufs_read_inode (data, 2);
   if (grub_errno)
     {
       grub_free (data);
@@ -616,7 +616,7 @@ grub_ufs_open (struct grub_file *file, const char *name)
       return grub_errno;
     }
   
-  grub_ufs_find_file (data, name);
+  ufs_find_file (data, name);
   if (grub_errno)
     {
       grub_free (data);
@@ -631,17 +631,17 @@ grub_ufs_open (struct grub_file *file, const char *name)
 
 
 static grub_ssize_t
-grub_ufs_read (grub_file_t file, char *buf, grub_size_t len)
+ufs_read (grub_file_t file, char *buf, grub_size_t len)
 {
-  struct grub_ufs_data *data = 
-    (struct grub_ufs_data *) file->data;
+  struct ufs_data *data = 
+    (struct ufs_data *) file->data;
   
-  return grub_ufs_read_file (data, file->read_hook, file->offset, len, buf);
+  return ufs_read_file (data, file->read_hook, file->offset, len, buf);
 }
 
 
 static grub_err_t
-grub_ufs_close (grub_file_t file)
+ufs_close (grub_file_t file)
 {
   grub_free (file->data);
   
@@ -650,27 +650,27 @@ grub_ufs_close (grub_file_t file)
 
 
 static grub_err_t
-grub_ufs_label (grub_device_t device __attribute ((unused)),
+ufs_label (grub_device_t device __attribute ((unused)),
 		char **label __attribute ((unused)))
 {
   return GRUB_ERR_NONE;
 }
 
 
-static struct grub_fs grub_ufs_fs =
+static struct grub_fs ufs_fs =
   {
     .name = "ufs",
-    .dir = grub_ufs_dir,
-    .open = grub_ufs_open,
-    .read = grub_ufs_read,
-    .close = grub_ufs_close,
-    .label = grub_ufs_label,
+    .dir = ufs_dir,
+    .open = ufs_open,
+    .read = ufs_read,
+    .close = ufs_close,
+    .label = ufs_label,
     .next = 0
   };
 
 GRUB_MOD_INIT(ufs)
 {
-  grub_fs_register (&grub_ufs_fs);
+  grub_fs_register (&ufs_fs);
 #ifndef GRUB_UTIL
   my_mod = mod;
 #endif
@@ -678,6 +678,6 @@ GRUB_MOD_INIT(ufs)
 
 GRUB_MOD_FINI(ufs)
 {
-  grub_fs_unregister (&grub_ufs_fs);
+  grub_fs_unregister (&ufs_fs);
 }
 
