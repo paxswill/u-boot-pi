@@ -20,19 +20,7 @@
 
 #include <common.h>
 #include <asm/byteorder.h>
-
-
-#define UFS_MAGIC		0x11954
-#define UFS2_MAGIC		0x19540119
-#define UFS_INODE		2
-#define UFS_FILETYPE_DIR	4
-#define UFS_FILETYPE_LNK	10
-#define UFS_MAX_SYMLNK_CNT	8
-
-#define UFS_DIRBLKS	12
-#define UFS_INDIRBLKS	3
-
-#define UFS_ATTR_DIR	040000
+#include <ufs.h>
 
 /* Calculate in which group the inode can be found.  */
 #define inode_group(inode,sblock) ()
