@@ -21,6 +21,8 @@
 #include <common.h>
 #include <asm/byteorder.h>
 #include <ufs.h>
+#include <part.h>
+
 
 /* Calculate in which group the inode can be found.  */
 #define inode_group(inode,sblock) ()
@@ -168,10 +170,53 @@ struct ufs_data
   int linknest;
 };
 
+static block_dev_desc_t *curr_dev;
+static disk_partition_t curr_part;
+static ufs_data curr_data;
+
+static int disk_read(unsigned long offset, lbaint_t len, void *buffer)
+{
+	if (!curr_dev || !curr_dev->block_read)
+		return -1;
+	return curr_dev->block_read(curr_dev->dev, curr_part.start + offset, len,
+			buffer);
+}
+
 /* Forward declaration.  */
 static grub_err_t ufs_find_file (struct ufs_data *data,
 				      const char *path);
 
+int ufs_set_blk_dev(block_dev_desc_t *dev_desc, disk_partition_t *info)
+{
+	int *superblock = sblocklist;
+
+	curr_dev = dev_desc;
+	curr_part = info;
+
+	/* Verify that this is actually a UFS volume */
+	data.ufs_type = UNKNOWN;
+	while (*superblock != -1) {
+		/* XXX: I'm not sure my assumption that the superblock list maps
+		 * directly to GRUB's sectors, or u-Boot's blocks
+		 */
+		if (disk_read(*superblock, sizeof(struct ufs_sblock), &data.sblock)) {
+			curr_dev = NULL;
+			return -1;
+		}
+		if (__le32_to_cpu(data.sblock.magic) == UFS_MAGIC) {
+			data.ufs_type = UFS1;
+			data.linknest = 0;
+			return 0;
+		} else if (__le32_to_cpu(data.sblock.magic) == UFS2_MAGIC) {
+			data.ufs_type = UFS2;
+			data.linknest = 0;
+			return 0;
+		}
+		superblock++;
+	}
+	curr_dev = NULL;
+	return -1;
+}
 
 static int
 ufs_get_file_block (struct ufs_data *data, unsigned int blk)
