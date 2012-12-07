@@ -20,12 +20,6 @@
 
 #include <common.h>
 #include <asm/byteorder.h>
-#include <grub/err.h>
-#include <grub/file.h>
-#include <grub/mm.h>
-#include <grub/misc.h>
-#include <grub/disk.h>
-#include <grub/dl.h>
 
 
 #define UFS_MAGIC		0x11954
